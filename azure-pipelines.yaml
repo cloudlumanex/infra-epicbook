@@ -1,7 +1,7 @@
 trigger: none
 
 pool: 
-  name: 'aws-SHA'
+  name: 'aws-ubuntu'
 
 variables: 
   - group: terraform-vars
@@ -27,6 +27,14 @@ stages:
           - checkout: self
           
           - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install -y terraform
+              terraform --version
+            displayName: 'Install Terraform'
+          
+          - script: |
               terraform init
             workingDirectory: '$(System.DefaultWorkingDirectory)'
             displayName: 'Terraform Init'
@@ -40,6 +48,14 @@ stages:
         displayName: 'Plan Infrastructure'
         steps:
           - checkout: self
+          
+          - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install -y terraform
+              terraform --version
+            displayName: 'Install Terraform'
           
           - script: |
               terraform init
@@ -95,6 +111,14 @@ stages:
         displayName: 'Apply Infrastructure'
         steps:
           - checkout: self
+          
+          - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install -y terraform
+              terraform --version
+            displayName: 'Install Terraform'
           
           - script: |
               terraform init
@@ -170,6 +194,14 @@ stages:
         displayName: 'Destroy Infrastructure'
         steps:
           - checkout: self
+          
+          - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install -y terraform
+              terraform --version
+            displayName: 'Install Terraform'
           
           - script: |
               terraform init
