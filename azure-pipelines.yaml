@@ -1,7 +1,7 @@
 trigger: none
 
 pool: 
-  name: 'aws-ubuntu'
+  name: 'aws-SHA'
 
 variables: 
   - group: terraform-vars
