@@ -1,0 +1,210 @@
+trigger: none
+
+pool: 
+  name: 'aws-ubuntu'
+
+variables: 
+  - group: terraform-vars
+  - group: epicbook-vars
+
+parameters:
+  - name: 'action'
+    type: string
+    default: 'plan'
+    displayName: 'Terraform Action'
+    values:
+      - plan
+      - apply
+      - destroy
+
+stages:
+  - stage: terraformInit
+    displayName: 'Terraform Initialize'
+    jobs:
+      - job: init
+        displayName: 'Initialize Terraform'
+        steps:
+          - checkout: self
+          
+          - script: |
+              terraform init
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Init'
+
+  - stage: terraformPlan
+    displayName: 'Terraform Plan'
+    dependsOn: terraformInit
+    condition: succeededOrFailed()
+    jobs:
+      - job: plan
+        displayName: 'Plan Infrastructure'
+        steps:
+          - checkout: self
+          
+          - script: |
+              terraform init
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Init'
+          
+          - script: |
+              cat > terraform.tfvars <<EOF
+              aws_region   = "$(TF_AWS_REGION)"
+              project_name = "$(TF_PROJECT_NAME)"
+              environment  = "$(TF_ENVIRONMENT)"
+              
+              vpc_cidr              = "$(TF_VPC_CIDR)"
+              public_subnet_cidr    = "$(TF_PUBLIC_SUBNET_CIDR)"
+              private_subnet_1_cidr = "$(TF_PRIVATE_SUBNET_1_CIDR)"
+              private_subnet_2_cidr = "$(TF_PRIVATE_SUBNET_2_CIDR)"
+              
+              instance_type = "$(TF_INSTANCE_TYPE)"
+              
+              ssh_public_key = "$(TF_SSH_PUBLIC_KEY)"
+              
+              db_engine_version    = "$(TF_DB_ENGINE_VERSION)"
+              db_instance_class    = "$(TF_DB_INSTANCE_CLASS)"
+              db_allocated_storage = $(TF_DB_ALLOCATED_STORAGE)
+              db_name              = "$(TF_DB_NAME)"
+              db_username          = "$(TF_RDS_ADMIN)"
+              db_password          = "$(TF_RDS_ADMIN_PASSWORD)"
+              EOF
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Create terraform.tfvars'
+          
+          - script: |
+              terraform plan -out=tfplan
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Plan'
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+          
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/tfplan'
+              artifact: 'terraform-plan'
+              publishLocation: 'pipeline'
+            displayName: 'Publish Plan Artifact'
+
+  - stage: terraformApply
+    displayName: 'Terraform Apply'
+    dependsOn: terraformPlan
+    condition: and(succeeded(), eq('${{ parameters.action }}', 'apply'))
+    jobs:
+      - job: apply
+        displayName: 'Apply Infrastructure'
+        steps:
+          - checkout: self
+          
+          - script: |
+              terraform init
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Init'
+          
+          - script: |
+              cat > terraform.tfvars <<EOF
+              aws_region   = "$(TF_AWS_REGION)"
+              project_name = "$(TF_PROJECT_NAME)"
+              environment  = "$(TF_ENVIRONMENT)"
+              
+              vpc_cidr              = "$(TF_VPC_CIDR)"
+              public_subnet_cidr    = "$(TF_PUBLIC_SUBNET_CIDR)"
+              private_subnet_1_cidr = "$(TF_PRIVATE_SUBNET_1_CIDR)"
+              private_subnet_2_cidr = "$(TF_PRIVATE_SUBNET_2_CIDR)"
+              
+              instance_type = "$(TF_INSTANCE_TYPE)"
+              
+              ssh_public_key = "$(TF_SSH_PUBLIC_KEY)"
+              
+              db_engine_version    = "$(TF_DB_ENGINE_VERSION)"
+              db_instance_class    = "$(TF_DB_INSTANCE_CLASS)"
+              db_allocated_storage = $(TF_DB_ALLOCATED_STORAGE)
+              db_name              = "$(TF_DB_NAME)"
+              db_username          = "$(TF_RDS_ADMIN)"
+              db_password          = "$(TF_RDS_ADMIN_PASSWORD)"
+              EOF
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Create terraform.tfvars'
+          
+          - script: |
+              terraform apply -auto-approve
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Apply'
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+          
+          - script: |
+              echo "Extracting Terraform outputs..."
+              terraform output -json > outputs.json
+              
+              VM_PUBLIC_IP=$(terraform output -raw app_server_public_ip)
+              RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
+              
+              echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_PUBLIC_IP"
+              echo "##vso[task.setvariable variable=RDS_ENDPOINT;isOutput=true]$RDS_ENDPOINT"
+              
+              echo "====================================="
+              echo "INFRASTRUCTURE PROVISIONING COMPLETE"
+              echo "====================================="
+              echo "VM Public IP: $VM_PUBLIC_IP"
+              echo "RDS Endpoint: $RDS_ENDPOINT"
+              echo "====================================="
+              echo ""
+              echo "Copy these values for the Ansible pipeline:"
+              echo "vm_public_ip: $VM_PUBLIC_IP"
+              echo "rds_endpoint: $RDS_ENDPOINT"
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Extract and Display Outputs'
+            name: terraform_outputs
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+
+  - stage: terraformDestroy
+    displayName: 'Terraform Destroy'
+    dependsOn: terraformPlan
+    condition: and(succeeded(), eq('${{ parameters.action }}', 'destroy'))
+    jobs:
+      - job: destroy
+        displayName: 'Destroy Infrastructure'
+        steps:
+          - checkout: self
+          
+          - script: |
+              terraform init
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Init'
+          
+          - script: |
+              cat > terraform.tfvars <<EOF
+              aws_region   = "$(TF_AWS_REGION)"
+              project_name = "$(TF_PROJECT_NAME)"
+              environment  = "$(TF_ENVIRONMENT)"
+              
+              vpc_cidr              = "$(TF_VPC_CIDR)"
+              public_subnet_cidr    = "$(TF_PUBLIC_SUBNET_CIDR)"
+              private_subnet_1_cidr = "$(TF_PRIVATE_SUBNET_1_CIDR)"
+              private_subnet_2_cidr = "$(TF_PRIVATE_SUBNET_2_CIDR)"
+              
+              instance_type = "$(TF_INSTANCE_TYPE)"
+              
+              ssh_public_key = "$(TF_SSH_PUBLIC_KEY)"
+              
+              db_engine_version    = "$(TF_DB_ENGINE_VERSION)"
+              db_instance_class    = "$(TF_DB_INSTANCE_CLASS)"
+              db_allocated_storage = $(TF_DB_ALLOCATED_STORAGE)
+              db_name              = "$(TF_DB_NAME)"
+              db_username          = "$(TF_RDS_ADMIN)"
+              db_password          = "$(TF_RDS_ADMIN_PASSWORD)"
+              EOF
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Create terraform.tfvars'
+          
+          - script: |
+              terraform destroy -auto-approve
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Terraform Destroy'
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
